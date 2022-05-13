@@ -12,18 +12,18 @@ end function
 !---------------------------------------------------
 
 
-program prod
+program brem
 implicit none
 real 			      :: sigma,dummy,tot,tot2
 real, allocatable :: n(:),z(:), phi(:,:), Ee(:),P(:,:),Ev(:),PI(:)
 integer                       :: i,ii,iii,ibin,j,jj,jjj,k
 
 !-----------------------Ev Array-----------------------
-!This creates an Ev array from 0 -> 2,000 eV with increments of 10
+!This creates an Ev array from 0 -> 10,000 eV with increments of 10
 
-allocate (Ev(200))
-Ev(1)=10
-do i=2,200
+allocate (Ev(1000))
+Ev(1)=10 !start array at 10 eV
+do i=2,1000
 	Ev(i)=Ev(i-1)+10
 end do	
 
@@ -34,7 +34,7 @@ end do
 !This section reads in the Neutral Densities and creates arrays for them.
 
 !Find out how many altitudes there are.
-call execute_command_line('wc -l <neutdens.txt > wc.txt' ) !uses the wordcounter to determine how many rows there are in the file
+call execute_command_line('wc -l <neutdens.txt > wc.txt' ) !uses the wordcounter command line function to determine how many rows there are in the file
 open(unit=12, file='wc.txt') !open dummy txtfile that has the row count
 read(12,*) ii !reads in the total number of rows from the dummy text file
 ii=ii-1+100 !accounts for the first row + 100 manufactured altitudes (more on these later)
@@ -47,15 +47,13 @@ allocate (z(ii))
 
 
 !manufacture 100 altitudes first, since the phi file starts at ~0km and neut dens starts at 200km with increments of 2km
-do j=1,100 !go until 200km
-	if (j.eq.1) then
-		z(j)=0.0
-		n(j)=2.552E-21 !this value was given by Dr. Cravens as a good estimate (this seems very small)
-	else
-		z(j)=z(j-1)+2E3 !increment the altitude
-		n(j)=2.552E-21
-	end if
+!Initialize altitude and density
+z(1)=0.0
+n(1)=2.552E-21 !this value was given by Dr. Cravens as a good estimate
 
+do j=2,100 !go until 200km
+		z(j)=z(j-1)+2E3 !increment the altitude by 2km
+		n(j)=2.552E-21
 end do
 
 
@@ -68,17 +66,14 @@ do i=101, ii !Start from 202km and go until max altitude
 	read(10,*) z(i),n(i)
 	z(i)=z(i)*(10**3) ! km -> m (fixes units)
 	n(i)=n(i)*(10**6) ! cm^-3 -> m^-3 (fixes units)
-
 end do 
-
 !-----------------------Phi-Up------------------------
 !This section reads in the Phi-Up data and creates arrays for them.
-open(unit=13, file='newphi.txt') !opens the phiup file
+open(unit=13, file='phi.txt') !opens the phiup file
 open(unit=14, file='wc1.txt') !open dummy txtfile
 
-call execute_command_line('wc -l <newphi.txt > wc1.txt' ) !use bash command word count
+call execute_command_line('wc -l <phi.txt > wc1.txt' ) !use bash command word count
 read(14,*) iii !this is the total number of rows in the Phi file
-
 
 ibin=260 !this is specific to our file, this needs to be generalized with a counter for any file
 !the value of 260 from above is the amount of different incident electron energies there are
@@ -92,7 +87,7 @@ iii=(iii-(2*ibin))/ibin !this is specific to our file, this needs to be generali
 iii=iii-44
 
 
-
+!allocate phi and electron energy arrays
 allocate (phi(ibin,ii))
 allocate (Ee(ibin))
 
@@ -133,16 +128,17 @@ end do
 !This section creates productions P(Ev,z) and integrates production over altitude for each energy to obtain intensity 
 open (unit=100, file='production.txt') 
 open (unit=106, file='intensity.txt') 
+!open (unit=111, file='testproduction.txt')
 
-allocate (P(200,ii))
-allocate (PI(200))
+allocate (P(1000,ii))
+allocate (PI(1000))
 
-
+  write(100,*) 'z', (Ev(I), I = 1, 1000) !cravens
 
 
 !PRODUCTION
 !E integral (determines prod by integrated cross section and phi over Electron energy)
-do i=1, 200
+do i=1, 1000
 
 	do jj=1, ii !z loop 
 	tot=0.0
@@ -158,21 +154,24 @@ do i=1, 200
 	P(i,jj)=4*4*ATAN(1.d0)*n(jj)*tot !4*ATAN(1.d0)=pi
 
 	!write to the file
-	if (i.eq.2) then !we want just 20eV to write to the output document
-	write (100,*)P(i,jj),z(jj)
-	else
-	end if
+!	if (i.eq.2) then !we want just 20eV to write to the output document !cravens
+!	write (111,*)P(i,jj),z(jj) !cravens
+!	else !cravens
+!	end if !cravens
+
 
 	end do !z loop
 
 end do !Ev loop
 
-
+    do jj=1,ii !cravens
+          write(100,*) z(jj), (P(I,jj), I = 1, 1000)
+    End do
 
 
 !INTENSITY
 !z integral (takes prod and integrates over altitude) to obtain intensity
-do i=1, 200
+do i=1, 1000
 	PI(i)=0.0
 	do k=1, ii
 	if (k.eq.1) then
@@ -218,7 +217,7 @@ end do
 !!	write (99,*) Ee(100), 'eV'
 !
 !	do i=1,ii
-!		write(99,*) phi(100,i),z(i)	
+!*****		write(99,*) n(i), phi(100,i),z(i)	
 !
 !
 !	end do
@@ -251,12 +250,12 @@ end do
 !-------------------Graphing------------------------------
 !The follow commands execute gnuplot with each .plt
 !These files are similar to scripts, but don't need to be executed independently
-call execute_command_line('gnuplot -p production.plt')
+!!call execute_command_line('gnuplot -p production.plt')
 !call execute_command_line('gnuplot -p phi_ee600.plt')
 !call execute_command_line('gnuplot -p phi_ee400.plt')
 !call execute_command_line('gnuplot -p phi_alt1050.plt')
 !call execute_command_line('gnuplot -p phi_alt50.plt')
-call execute_command_line('gnuplot -p intensity.plt')
+!!call execute_command_line('gnuplot -p intensity.plt')
 
 
 
@@ -290,6 +289,7 @@ close(12)
 close(14)
 close (105)
 close (106)
+!close (111)
 
 !deallocate arrays
 deallocate (n)
@@ -303,4 +303,4 @@ deallocate (PI)
 call execute_command_line('rm wc.txt')
 call execute_command_line('rm wc1.txt')
 
-end program prod
+end program brem
